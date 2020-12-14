@@ -32,7 +32,6 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
 
   private int status;     // status of listener
   private float numSteps; // number of the steps
-  private float startNumSteps; //first value, to be substracted in step counter sensor type
   private long startAt; //time stamp of when the measurement starts
 
   private SensorManager sensorManager; // Sensor manager
@@ -46,7 +45,6 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
 
     this.startAt = 0;
     this.numSteps = 0;
-    this.startNumSteps = 0;
     this.setStatus(BMDPedometerModule.STOPPED);
     this.stepDetector = new StepDetector();
     this.stepDetector.registerListener(this);
@@ -96,6 +94,7 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
     if (this.status != BMDPedometerModule.RUNNING) {
       // If not running, then this is an async call, so don't worry about waiting
       // We drop the callback onto our stack, call start, and let start and the sensor callback fire off the callback down the road
+      this.startAt = date;
       this.start();
     }
   }
@@ -158,11 +157,7 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
 
     if(this.mSensor.getType() == Sensor.TYPE_STEP_COUNTER){
       float steps = event.values[0];
-
-      if(this.startNumSteps == 0)
-        this.startNumSteps = steps;
-
-      this.numSteps = steps - this.startNumSteps;
+      this.numSteps = steps;
 
       try {
         this.sendPedometerUpdateEvent(this.getStepsParamsMap());
@@ -195,9 +190,11 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
           return;
       }
 
-      this.startAt = System.currentTimeMillis();
+      if (this.startAt == 0) {
+        this.startAt = System.currentTimeMillis();
+      }
+
       this.numSteps = 0;
-      this.startNumSteps = 0;
       this.setStatus(BMDPedometerModule.STARTING);
 
       // Get pedometer or accelerometer from sensor manager
