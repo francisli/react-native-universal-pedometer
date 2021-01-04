@@ -62,5 +62,11 @@ export default {
    */
   stopPedometerUpdates: () => {
     BMDPedometer.stopPedometerUpdates();
-  }
+  },
+  /**
+   * try something
+   */
+  tryAThing: callback => {
+    BMDPedometer.tryAThing(callback);
+  },
 };

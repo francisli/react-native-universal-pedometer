@@ -20,6 +20,7 @@ declare const _default: {
   startPedometerUpdatesFromDate: (date: number, listener: Listener) => void;
   queryPedometerDataBetweenDates: (startDate: number, endDate: number, callback: QueryCallback) => void;
   stopPedometerUpdates: () => void;
+  tryAThing: (callback: Callback) => void;
 };
 
 export default _default;
