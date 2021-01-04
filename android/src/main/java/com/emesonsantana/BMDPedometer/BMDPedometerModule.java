@@ -1,15 +1,23 @@
 package com.emesonsantana.BMDPedometer;
 
+import android.app.Service;
 import android.content.Context;
+import android.content.Intent;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.FragmentActivity;
 
 import android.os.Handler;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.util.Pair;
 
+import com.emesonsantana.BMDPedometer.util.Database;
+
+import com.emesonsantana.BMDPedometer.util.Utility;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.Arguments;
@@ -19,7 +27,11 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
-public class BMDPedometerModule extends ReactContextBaseJavaModule implements SensorEventListener, StepListener, LifecycleEventListener {
+import java.util.List;
+
+import static android.content.Context.SENSOR_SERVICE;
+
+public class BMDPedometerModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
 
   ReactApplicationContext reactContext;
 
@@ -37,7 +49,8 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
   private SensorManager sensorManager; // Sensor manager
   private Sensor mSensor;             // Pedometer sensor returned by sensor manager
   private StepDetector stepDetector;
-
+  private Database database;
+  private Intent serviceIntent;
   public BMDPedometerModule(ReactApplicationContext reactContext) {
     super(reactContext);
     this.reactContext = reactContext;
@@ -47,9 +60,10 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
     this.numSteps = 0;
     this.setStatus(BMDPedometerModule.STOPPED);
     this.stepDetector = new StepDetector();
-    this.stepDetector.registerListener(this);
 
-    this.sensorManager = (SensorManager) this.reactContext.getSystemService(Context.SENSOR_SERVICE);
+    this.sensorManager = (SensorManager) this.reactContext.getSystemService(SENSOR_SERVICE);
+    this.database = Database.getInstance(reactContext);
+    this.serviceIntent = new Intent(reactContext, StepService.class);
   }
 
   @Override
@@ -95,6 +109,7 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
       // If not running, then this is an async call, so don't worry about waiting
       // We drop the callback onto our stack, call start, and let start and the sensor callback fire off the callback down the road
       this.startAt = date;
+      this.numSteps = database.getCurrentSteps() + database.getSteps(Utility.getToday());
       this.start();
     }
   }
@@ -109,11 +124,18 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
   @ReactMethod
   public void queryPedometerDataBetweenDates(Integer startDate, Integer endDate, Callback callback) {
     try {
+      this.numSteps = this.database.getSteps(startDate, endDate);
       callback.invoke(null, this.getStepsParamsMap());
     } catch(Exception e) {
       callback.invoke(e.getMessage(), null);
     }
 
+  }
+
+  @ReactMethod
+  public void tryAThing(Callback callback) {
+    String value = database.getLastEntries(10).toString();
+    callback.invoke(null, value);
   }
 
   @Override
@@ -132,7 +154,6 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
   /**
    * Called when the accuracy of the sensor has changed.
    */
-  @Override
   public void onAccuracyChanged(Sensor sensor, int accuracy) {
     //nothing to do here
     return;
@@ -142,7 +163,6 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
    * Sensor listener event.
    * @param event
    */
-  @Override
   public void onSensorChanged(SensorEvent event) {
     // Only look at step counter or accelerometer events
     if (event.sensor.getType() != this.mSensor.getType()) {
@@ -171,7 +191,6 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
     }
   }
 
-  @Override
   public void step(long timeNs) {
     this.numSteps++;
     try {
@@ -185,45 +204,15 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
    * Start listening for pedometers sensor.
    */
   private void start() {
-      // If already starting or running, then return
-      if ((this.status == BMDPedometerModule.RUNNING) || (this.status == BMDPedometerModule.STARTING)) {
-          return;
-      }
-
-      if (this.startAt == 0) {
-        this.startAt = System.currentTimeMillis();
-      }
-
-      this.numSteps = 0;
-      this.setStatus(BMDPedometerModule.STARTING);
-
-      // Get pedometer or accelerometer from sensor manager
-      this.mSensor = this.sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-      if(this.mSensor == null) this.mSensor = this.sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-
-      // If found, then register as listener
-      if (this.mSensor != null) {
-          int sensorDelay = this.mSensor.getType() == Sensor.TYPE_STEP_COUNTER ? SensorManager.SENSOR_DELAY_UI : SensorManager.SENSOR_DELAY_FASTEST;
-          if (this.sensorManager.registerListener(this, this.mSensor, sensorDelay)) {
-              this.setStatus(BMDPedometerModule.STARTING);
-          } else {
-              this.setStatus(BMDPedometerModule.ERROR_FAILED_TO_START);
-              return;
-          };
-      } else {
-          this.setStatus(BMDPedometerModule.ERROR_FAILED_TO_START);
-          return;
-      }
+    reactContext.startService(serviceIntent);
   }
 
   /**
    * Stop listening to sensor.
    */
   private void stop() {
-      if (this.status != BMDPedometerModule.STOPPED) {
-          this.sensorManager.unregisterListener(this);
-      }
-      this.setStatus(BMDPedometerModule.STOPPED);
+      //reactContext.stopService(this.serviceIntent);
+      //this.setStatus(BMDPedometerModule.STOPPED);
   }
 
   private void setStatus(int status) {
@@ -232,12 +221,6 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
 
   private WritableMap getStepsParamsMap() {
     WritableMap map = Arguments.createMap();
-    // pedometerData.startDate; -> ms since 1970
-    // pedometerData.endDate; -> ms since 1970
-    // pedometerData.numberOfSteps;
-    // pedometerData.distance;
-    // pedometerData.floorsAscended;
-    // pedometerData.floorsDescended;
     map.putInt("startDate", (int)this.startAt);
     map.putInt("endDate", (int)System.currentTimeMillis());
     map.putDouble("numberOfSteps", this.numSteps);
@@ -260,7 +243,7 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Se
 
   private void sendPedometerUpdateEvent(@Nullable WritableMap params) {
     this.reactContext
-      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-      .emit("pedometerDataDidUpdate", params);
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+            .emit("pedometerDataDidUpdate", params);
   }
 }
