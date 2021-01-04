@@ -184,17 +184,17 @@ public class StepService extends Service implements SensorEventListener  {
         if (steps > 0) {
             if (today_offset == Integer.MIN_VALUE) today_offset = -steps;
             NumberFormat format = NumberFormat.getInstance(Locale.getDefault());
-            notificationBuilder.setProgress(goal, today_offset + steps, false).setContentText(
-                    today_offset + steps >= goal ?
-                            context.getString(R.string.goal_reached_notification,
-                                    format.format((today_offset + steps))) :
-                            context.getString(R.string.notification_text,
-                                    format.format((goal - today_offset - steps)))).setContentTitle(
-                    format.format(today_offset + steps) + " " + context.getString(R.string.steps));
+            // notificationBuilder.setProgress(goal, today_offset + steps, false).setContentText(
+            //         today_offset + steps >= goal ?
+            //                 context.getString(R.string.goal_reached_notification,
+            //                         format.format((today_offset + steps))) :
+            //                 context.getString(R.string.notification_text,
+            //                         format.format((goal - today_offset - steps)))).setContentTitle(
+            //         format.format(today_offset + steps) + " " + context.getString(R.string.steps));
         } else { // still no step value?
-            notificationBuilder.setContentText(
-                    context.getString(R.string.your_progress_will_be_shown_here_soon))
-                    .setContentTitle(context.getString(R.string.notification_title));
+            // notificationBuilder.setContentText(
+            //         context.getString(R.string.your_progress_will_be_shown_here_soon))
+            //         .setContentTitle(context.getString(R.string.notification_title));
         }
         notificationBuilder.setPriority(Notification.PRIORITY_MIN).setShowWhen(false)
                 .setContentIntent(PendingIntent
