@@ -46,8 +46,8 @@ export default {
    * start pedometer
    */
   startPedometerUpdatesFromDate: (date, listener) => {
-    BMDPedometer.startPedometerUpdatesFromDate(date);
     PedometerEmitter.addListener('pedometerDataDidUpdate', listener);
+    BMDPedometer.startPedometerUpdatesFromDate(date);
   },
 
   /**
@@ -61,6 +61,7 @@ export default {
    * stop pedometer
    */
   stopPedometerUpdates: () => {
+    PedometerEmitter.removeListener('pedometerDataDidUpdate');
     BMDPedometer.stopPedometerUpdates();
   },
   /**

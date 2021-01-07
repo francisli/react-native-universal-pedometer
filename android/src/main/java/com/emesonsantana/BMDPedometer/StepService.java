@@ -31,16 +31,23 @@ import java.util.Date;
 import java.util.Locale;
 
 public class StepService extends Service implements SensorEventListener  {
+    public final static String INTENT_STEPPED = "STEPPED";
+    public static final String INTENT_EXTRA_STEPPED = "STEPPED";
+
     public final static int NOTIFICATION_ID = 1;
+
     private final static long MICROSECONDS_IN_ONE_MINUTE = 60000000;
+    private final static long MILLISECONDS_IN_ONE_SECOND = 1000;
     private final static long SAVE_OFFSET_TIME = AlarmManager.INTERVAL_HOUR;
     private final static int SAVE_OFFSET_STEPS = 500;
 
-    private static int steps;
-    private static int lastSaveSteps;
-    private static long lastSaveTime;
+    private int steps;
+    private int lastSaveSteps;
+    private long lastSaveTime;
+    private long debugTimer = System.currentTimeMillis();
 
     private final BroadcastReceiver shutdownReceiver = new ShutdownReceiver();
+    private final StepDetector stepDetector = new StepDetector();
 
     @Override
     public void onAccuracyChanged(final Sensor sensor, int accuracy) {
@@ -49,15 +56,48 @@ public class StepService extends Service implements SensorEventListener  {
         if (BuildConfig.DEBUG) Logger.log(sensor.getName() + " accuracy changed: " + accuracy);
     }
 
+    /**
+     * Sensor listener event.
+     * @param event
+     */
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
     @Override
     public void onSensorChanged(final SensorEvent event) {
-        if (event.values[0] > Integer.MAX_VALUE) {
-            if (BuildConfig.DEBUG) Logger.log("probably not a real value: " + event.values[0]);
+
+        boolean isKnownSensorType = false;
+        int nextStepCount = 0;
+
+        if(event.sensor.getType() == Sensor.TYPE_STEP_COUNTER){
+            isKnownSensorType = true;
+            nextStepCount = (int) event.values[0];
+        } else if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            isKnownSensorType = true;
+            nextStepCount = stepDetector.updateAccel(
+                    event.timestamp, event.values[0], event.values[1], event.values[2]);
+        }
+        // Only look at step counter or accelerometer events
+        if (!isKnownSensorType)
             return;
-        } else {
-            steps = (int) event.values[0];
-            updateIfNecessary();
+
+        // during debug let us take a step if a second has passed
+        // so we don't have to be very precise with sensors to see activity
+        if (BuildConfig.DEBUG && nextStepCount == 0) {
+            long now = System.currentTimeMillis();
+            long diff = now - debugTimer;
+            if ( diff >= MILLISECONDS_IN_ONE_SECOND) {
+                debugTimer = now;
+                nextStepCount = 1;
+            }
+        }
+
+        this.steps += nextStepCount;
+
+        save();
+
+        if (nextStepCount > 0) {
+            Intent stepped = new Intent(INTENT_STEPPED);
+            stepped.putExtra(INTENT_EXTRA_STEPPED, this.steps);
+            sendBroadcast(stepped);
         }
     }
 
@@ -65,7 +105,7 @@ public class StepService extends Service implements SensorEventListener  {
      * @return true, if notification was updated
      */
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
-    private boolean updateIfNecessary() {
+    private boolean save() {
         if (steps > lastSaveSteps + SAVE_OFFSET_STEPS ||
                 (steps > 0 && System.currentTimeMillis() > lastSaveTime + SAVE_OFFSET_TIME)) {
             if (BuildConfig.DEBUG) Logger.log(
@@ -116,7 +156,7 @@ public class StepService extends Service implements SensorEventListener  {
     public int onStartCommand(final Intent intent, int flags, int startId) {
         reRegisterSensor();
         registerBroadcastReceiver();
-        if (!updateIfNecessary()) {
+        if (!save()) {
             showNotification();
         }
 
@@ -169,7 +209,7 @@ public class StepService extends Service implements SensorEventListener  {
 
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
     @SuppressLint("StringFormatInvalid")
-    public static Notification getNotification(final Context context) {
+    public Notification getNotification(final Context context) {
         if (BuildConfig.DEBUG) Logger.log("getNotification");
         SharedPreferences prefs = context.getSharedPreferences("pedometer", Context.MODE_PRIVATE);
         int goal = prefs.getInt("goal", 10000);
@@ -224,12 +264,27 @@ public class StepService extends Service implements SensorEventListener  {
 
         if (BuildConfig.DEBUG) {
             Logger.log("step sensors: " + sm.getSensorList(Sensor.TYPE_STEP_COUNTER).size());
-            if (sm.getSensorList(Sensor.TYPE_STEP_COUNTER).size() < 1) return; // emulator
-            Logger.log("default: " + sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER).getName());
+            if (sm.getSensorList(Sensor.TYPE_STEP_COUNTER).size() > 1) {
+                Logger.log("default: " + sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER).getName());
+            }
+            else if (sm.getSensorList(Sensor.TYPE_ACCELEROMETER).size() > 1) {
+                Logger.log("default: " + sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER).getName());
+            }
+            else {
+                Logger.log("no available sensors");
+            }
+
         }
 
-        // enable batching with delay of max 5 min
-        sm.registerListener(this, sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER),
-                SensorManager.SENSOR_DELAY_NORMAL, (int) (5 * MICROSECONDS_IN_ONE_MINUTE));
+        Sensor sensor = sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
+        if (sensor == null) {
+            sensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        }
+
+        if (sensor != null) {
+            // enable batching with delay of max 5 min
+            sm.registerListener(this, sensor,
+                    SensorManager.SENSOR_DELAY_NORMAL, (int) (5 * MICROSECONDS_IN_ONE_MINUTE));
+        }
     }
 }

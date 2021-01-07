@@ -35,16 +35,10 @@ public class StepDetector {
   private long lastStepTimeNs = 0;
   private float oldVelocityEstimate = 0;
 
-  private StepListener listener;
-
-  public void registerListener(StepListener listener) {
-    this.listener = listener;
-  }
-
   /**
    * Accepts updates from the accelerometer.
    */
-  public void updateAccel(long timeNs, float x, float y, float z) {
+  public int updateAccel(long timeNs, float x, float y, float z) {
     float[] currentAccel = new float[3];
     currentAccel[0] = x;
     currentAccel[1] = y;
@@ -75,11 +69,15 @@ public class StepDetector {
 
     float velocityEstimate = SensorFusionMath.sum(velRing);
 
+    //aboone: I didn't review this algorithm, but it only returns one step today
+    // keeping that logic but changing the implementation to support multiple steps in the future
+    int newSteps = 0;
     if (velocityEstimate > STEP_THRESHOLD && oldVelocityEstimate <= STEP_THRESHOLD
         && (timeNs - lastStepTimeNs > STEP_DELAY_NS)) {
-      listener.step(timeNs);
+      newSteps = 1;
       lastStepTimeNs = timeNs;
     }
     oldVelocityEstimate = velocityEstimate;
+    return newSteps;
   }
 }
