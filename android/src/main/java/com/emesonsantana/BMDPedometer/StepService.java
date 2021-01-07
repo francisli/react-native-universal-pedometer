@@ -22,6 +22,7 @@ import androidx.annotation.RequiresApi;
 
 import com.emesonsantana.BMDPedometer.util.API23Wrapper;
 import com.emesonsantana.BMDPedometer.util.API26Wrapper;
+import com.emesonsantana.BMDPedometer.util.IsEmulatorConstant;
 import com.emesonsantana.BMDPedometer.util.Utility;
 import com.emesonsantana.BMDPedometer.util.Logger;
 import com.emesonsantana.BMDPedometer.util.Database;
@@ -79,9 +80,9 @@ public class StepService extends Service implements SensorEventListener  {
         if (!isKnownSensorType)
             return;
 
-        // during debug let us take a step if a second has passed
+        // during emulator, let us take a step if a second has passed
         // so we don't have to be very precise with sensors to see activity
-        if (BuildConfig.DEBUG && nextStepCount == 0) {
+        if (IsEmulatorConstant.isEmulator && nextStepCount == 0) {
             long now = System.currentTimeMillis();
             long diff = now - debugTimer;
             if ( diff >= MILLISECONDS_IN_ONE_SECOND) {

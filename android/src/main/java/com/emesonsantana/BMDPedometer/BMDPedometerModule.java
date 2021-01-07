@@ -22,11 +22,11 @@ public class BMDPedometerModule extends ReactContextBaseJavaModule implements Li
 
   ReactApplicationContext reactContext;
 
-  public static int STOPPED = 0;
-  public static int STARTING = 1;
-  public static int RUNNING = 2;
-  public static int ERROR_FAILED_TO_START = 3;
-  public static int ERROR_NO_SENSOR_FOUND = 4;
+  public static final int STOPPED = 0;
+  public static final int STARTING = 1;
+  public static final int RUNNING = 2;
+  public static final int ERROR_FAILED_TO_START = 3;
+  public static final int ERROR_NO_SENSOR_FOUND = 4;
 
   private int status;     // status of listener
 
