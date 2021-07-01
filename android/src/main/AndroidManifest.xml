@@ -18,8 +18,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" android:maxSdkVersion="26"/>
 
     <application
-        android:allowBackup="true"
-        tools:replace="label">
+        android:allowBackup="true">
 
         <receiver android:name=".BootReceiver">
             <intent-filter>
